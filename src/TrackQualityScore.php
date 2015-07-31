@@ -1,21 +1,6 @@
 <?php
 
-/**
- * this script tracks keyword quality scores over time. When run, the script
- * goes through all keywords you’ve marked with a certain label and checks
- * their quality scores. Changes are logged and can be emailed to you.
- * The script also writes all values into a spreadsheet, so that over
- * time you’ll get a complete history.
- * 
- * The recommended use is to run the script regularly for your top keywords
- * to see changes over time. You can use it for a quick diagnosis,
- * but you can also use the history in the spreadsheet
- * for an in depth analysis later.
- */
-
-use Psr\Log\LoggerInterface;
-
-namespace AdWordsApiScripts;
+namespace AdWordsApiScripts\Tests;
 
 class TrackQualityScore
 {

@@ -1,12 +1,14 @@
 <?php
 
-namespace AdWordsApiScripts;
+namespace AdWordsApiScripts\Checkers;
 
 use Psr\Log\LoggerInterface;
 use React\EventLoop\Factory as EventLoopFactory;
 use WyriHaximus\React\RingPHP\HttpClientAdapter as RingAdapter;
 use GuzzleHttp\Client as HttpClient;
 use GuzzleHttp\Message\Response;
+use AdWordsApiScripts\LabelCreator;
+use AdWordsApiScripts\Labeler;
 
 /**
  * As a website evolves, new pages get added, old pages are taken down, links
@@ -27,7 +29,7 @@ use GuzzleHttp\Message\Response;
  */
 
 /**
- * The script creates a label "link_checked" in your account and uses it to
+ * The script creates a label "LINK_CHECKED" in your account and uses it to
  * track the ads and keywords that it already tested so far today.
  * The label gets removed and re-created every day.
  *
@@ -36,13 +38,15 @@ use GuzzleHttp\Message\Response;
  * check the URLs, and records the results into a spreadsheet.
  */
 
-class LinkChecker
+class LinkChecker implements LabelCreator
 {
+    use Labeler;
+
     const ADS = 1;
 
     protected $reportWriter;
 
-    protected $labelName = 'LINK_CHECKED';
+    const LABEL_NAME = 'LINK_CHECKED';
 
     /**
      * @var \TextLabel
@@ -79,15 +83,15 @@ class LinkChecker
 
     public function __construct(\AdWordsUser $adwords, LoggerInterface $logger)
     {
-        $this->adwords = $adwords;
-        $this->logger = $logger;
-
-        $this->loop = $loop = EventLoopFactory::create();
-        $handler = new RingAdapter($loop);
-
+        $this->adwords    = $adwords;
+        $this->logger     = $logger;
+        $this->loop       = $loop = EventLoopFactory::create();
+        $handler          = new RingAdapter($loop);
         $this->httpClient = new HttpClient([
             'handler' => $handler
         ]);
+
+        $this->setLabelService($adwords->getService('LabelService'));
     }
 
     /**
@@ -103,14 +107,15 @@ class LinkChecker
         }
 
         if (empty($this->checkers)) {
-            $this->logger->warn('requested no keywords and no ads checking. Exiting.');
+            $this->logger->warn('Nothing to check. Exiting.');
             return;
         }
 
+        $this->label = $this->getOrCreateLabel(self::LABEL_NAME);
+
+        return;
+
         $this->dealWithFirstRunOfTheDay();
-
-        $this->createLinkCheckerLabel();
-
         $urlsWithEntity = [];
 
         foreach ($this->checkers as $check) {
@@ -149,7 +154,7 @@ class LinkChecker
 
         //$this->notifyAboutReport();
 
-        $this->logger->log('Finished. All done for the day!');
+        //$this->logger->log('Finished. All done for the day!');
     }
 
     /**
@@ -237,7 +242,9 @@ class LinkChecker
             });
         }
 
-        $this->loop->run();
+        if (count($urlCombinations) > 0) {
+            $this->loop->run();
+        }
 
         return $results;
     }
@@ -247,40 +254,13 @@ class LinkChecker
 
     }
 
-    protected function dealWithFirstRunOfTheDay()
+    protected function reset(\DateTime $lastChecked = null)
     {
         $date = new \DateTime;
 
-
-    }
-
-    /**
-     * Make sure that we have a "link has been checked" label
-     */
-    protected function createLinkCheckerLabel()
-    {
-        $labelService = $this->adwords->getService('LabelService');
-
-        $selector = new \Selector;
-        $selector->fields = ['LabelId'];
-        $selector->predicates = [new \Predicate('LabelName', 'EQUALS', $this->labelName)];
-
-        $page = $labelService->get($selector);
-
-        if (count($page->entries) === 0) {
-            $this->logger->info('creating label "' . $this->labelName . '"');
-
-            $label = new \TextLabel(null, $this->labelName, 'ENABLED');
-            $operation = new \LabelOperation;
-            $operation->operand = $label;
-            $operation->operator = 'ADD';
-
-            $result = $labelService->mutate([$operation]);
-
-            // get label
-            // store in $this->label
-        } else {
-            $this->label = $page->entries[0];
-        }
+        if (is_null($lastChecked) || $lastChecked->format('y') != $date->format('y')
+            || $lastChecked->format('m') != $date->format('m') || $lastChecked->format('d') != $date->format('d')) {
+                // kill entities with the given label
+            }
     }
 }
